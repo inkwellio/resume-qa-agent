@@ -13,6 +13,8 @@ export interface AbuseLimits {
   dailyRequestsPerVisitor: number;
   turnTimeoutMs: number;
   ipChatWindowMs: number;
+  /** 时段到期后多久自动恢复。0 表示永久关闭，只能手动解除。 */
+  ipChatCooldownMs: number;
   leaseMs: number;
   heartbeatMs: number;
   quotaTimeZone: string;
@@ -24,10 +26,15 @@ export const DEFAULT_ABUSE_LIMITS: AbuseLimits = {
   dailyRequests: 300, dailyRequestsPerIp: 50, dailyRequestsPerVisitor: 30,
   turnTimeoutMs: 120_000, leaseMs: 30_000, heartbeatMs: 5_000,
   ipChatWindowMs: 15 * 60_000,
+  ipChatCooldownMs: 0,
   quotaTimeZone: "Asia/Singapore",
 };
 
-export type RateScope = "api-ip" | "stop-ip" | "chat-ip" | "chat-visitor" | "feedback-ip";
+export type RateScope = "api-ip" | "stop-ip" | "chat-ip" | "chat-visitor" | "feedback-ip" | "admin-login-ip";
+
+/** 站长登录/注册每 IP 每 15 分钟的尝试次数，先于 bcrypt 计数，限制暴力破解和 CPU 消耗。 */
+export const ADMIN_LOGIN_WINDOW_MS = 15 * 60_000;
+export const ADMIN_LOGIN_MAX = 10;
 export interface ProtectionOptions {
   rateWindowMs: number;
   rateMax: number;
@@ -87,7 +94,16 @@ export function plaintextClientIp(value: string | null | undefined): string | nu
 export function rateMax(scope: RateScope, options: ProtectionOptions): number {
   if (scope === "api-ip" || scope === "stop-ip") return options.limits.apiRateMax;
   if (scope === "chat-visitor") return options.limits.visitorRateMax;
+  if (scope === "admin-login-ip") return ADMIN_LOGIN_MAX;
   return options.rateMax;
+}
+
+export function rateWindow(scope: RateScope, options: ProtectionOptions): number {
+  return scope === "admin-login-ip" ? ADMIN_LOGIN_WINDOW_MS : options.rateWindowMs;
+}
+
+export function invalidIpError(): ProtectionError {
+  return new ProtectionError(400, "invalid_ip", "请输入有效的 IPv4 或 IPv6 地址。", null);
 }
 
 export function identityHash(value: string): string {
@@ -118,15 +134,18 @@ export function createMemoryProtection(options: ProtectionOptions, now = Date.no
     async rate(scope, key) {
       let limiter = limiters.get(scope);
       if (!limiter) {
-        limiter = createRateLimiter({ windowMs: options.rateWindowMs, max: rateMax(scope, options), now });
+        limiter = createRateLimiter({ windowMs: rateWindow(scope, options), max: rateMax(scope, options), now });
         limiters.set(scope, limiter);
       }
-      if (!limiter.allow(identityHash(key))) throw new ProtectionError(429, "rate_limited", "请求过于频繁，请稍后再试。", Math.ceil(options.rateWindowMs / 1000));
+      if (!limiter.allow(identityHash(key))) throw new ProtectionError(429, "rate_limited", "请求过于频繁，请稍后再试。", Math.ceil(rateWindow(scope, options) / 1000));
     },
     async acquire(input) {
       const time = now();
       for (const [id, lease] of leases) if (lease.expires <= time) leases.delete(id);
       const ipKey = identityHash(input.ip);
+      const cooldown = options.limits.ipChatCooldownMs;
+      const previous = ipWindows.get(ipKey);
+      if (previous && cooldown > 0 && time >= previous.expiresAt + cooldown) ipWindows.delete(ipKey);
       const existingWindow = ipWindows.get(ipKey);
       const startedAt = existingWindow?.startedAt ?? time;
       const ipWindowDeadline = existingWindow?.expiresAt ?? time + options.limits.ipChatWindowMs;
@@ -161,7 +180,7 @@ export function createMemoryProtection(options: ProtectionOptions, now = Date.no
     },
     async resetIpWindow(ip) {
       const canonical = normalizeClientIp(ip);
-      if (canonical === "unknown") throw new Error("请输入有效的 IPv4 或 IPv6 地址。");
+      if (canonical === "unknown") throw invalidIpError();
       const key = identityHash(canonical);
       const existed = ipWindows.delete(key);
       for (const [id, lease] of leases) {

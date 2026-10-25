@@ -10,6 +10,7 @@
     "migrate": "tsx src/migrate-cli.ts",
     "feedback:report": "tsx src/feedback-report.ts",
     "ip:reset": "tsx src/ip-reset-cli.ts",
+    "admin:create": "tsx src/admin-create-cli.ts",
     "eval:retrieval": "tsx src/eval-retrieval.ts",
     "eval:security": "tsx src/eval-security.ts",
     "prebuild": "pnpm --filter @resume/retrieval build",

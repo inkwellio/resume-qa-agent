@@ -4,12 +4,11 @@ import {
   adminSessionCookie,
   normalizeAdminPhone,
   passwordMatches,
-  readAdminPassword,
   readAdminSessionToken,
   type AdminAccountStore,
 } from "./admin-accounts.js";
 import type { AdminDirectory } from "./admin-directory.js";
-import type { AbuseProtection, IpWindowSnapshot } from "./abuse-protection.js";
+import { ProtectionError, type AbuseProtection, type IpWindowSnapshot } from "./abuse-protection.js";
 import { IpBanError, type IpBanRecord, type IpBanStore } from "./ip-ban.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -21,12 +20,13 @@ class AdminError extends Error {
 }
 
 function fail(res: Response, error: unknown): void {
-  if (error instanceof AdminError || error instanceof AdminAccountError || error instanceof IpBanError) {
-    res.status(error.status).json({ message: error.message, code: error.code });
+  if (error instanceof ProtectionError) {
+    if (error.retryAfter !== null) res.setHeader("Retry-After", String(error.retryAfter));
+    res.status(error.status).json({ message: error.status === 429 ? "尝试次数过多，请 15 分钟后再试。" : error.message, code: error.code });
     return;
   }
-  if (error instanceof Error && error.message.includes("请输入有效")) {
-    res.status(400).json({ message: "请输入有效的 IPv4 或 IPv6 地址。", code: "invalid_ip" });
+  if (error instanceof AdminError || error instanceof AdminAccountError || error instanceof IpBanError) {
+    res.status(error.status).json({ message: error.message, code: error.code });
     return;
   }
   console.error("站长后台操作失败");
@@ -110,8 +110,9 @@ export function mountAdminRoutes(app: Express, options: {
   ipBans: IpBanStore;
   directory: AdminDirectory;
   protection: AbuseProtection;
+  clientIp: (req: Request) => string;
 }): void {
-  const { accounts, cookieSecure, ipBans, directory, protection } = options;
+  const { accounts, cookieSecure, ipBans, directory, protection, clientIp } = options;
   app.use("/api/admin", (_req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     next();
@@ -120,26 +121,15 @@ export function mountAdminRoutes(app: Express, options: {
   app.get("/api/admin/session", async (req, res) => {
     try {
       const account = await accounts.authenticate(readAdminSessionToken(req.header("cookie")));
-      const needsSetup = account ? false : (await accounts.count()) === 0;
-      res.json({ authenticated: Boolean(account), needsSetup });
+      res.json({ authenticated: Boolean(account) });
     } catch (error) { fail(res, error); }
   });
 
-  app.post("/api/admin/setup", async (req, res) => {
-    try {
-      const body = readRecord(req);
-      const phone = normalizeAdminPhone(body.phone);
-      const password = readAdminPassword(body.password);
-      if (body.confirmPassword !== password) throw new AdminAccountError(400, "password_mismatch", "两次密码不一致");
-      const account = await accounts.create(phone, password);
-      const session = await accounts.createSession(account.id);
-      res.append("Set-Cookie", adminSessionCookie(session.token, cookieSecure));
-      res.json({ ok: true });
-    } catch (error) { fail(res, error); }
-  });
-
+  // 站长账号只由命令行 pnpm admin:create 按配置创建，网页上没有注册入口。
   app.post("/api/admin/login", async (req, res) => {
     try {
+      // 先计数再做 bcrypt，限制暴力破解和 CPU 消耗。站长接口不受 IP 封禁影响，这里是唯一的尝试上限。
+      await protection.rate("admin-login-ip", clientIp(req));
       const body = readRecord(req);
       let phone: string | null = null;
       try { phone = normalizeAdminPhone(body.phone); } catch { phone = null; }

@@ -11,7 +11,7 @@
 - 档案、技能、建议问题与自由提问
 - 检索步骤、项目卡片、简历 PDF 下载、联系方式
 - 邮箱验证码登录后才能聊天（本地可用开发开关把验证码打到终端）
-- 站长后台：会话、访客、IP 黑名单
+- 站长后台：会话、访客、IP 黑名单（账号由命令行创建，没有网页注册）
 - 演示模式（`CHAT_MOCK=1`）无需模型密钥即可看界面
 
 ## 技术栈
@@ -45,9 +45,17 @@ pnpm dev
 
 **隐私**：电话、邮箱只写在 `contact`；不要把身份证号、住址、薪资期望放进检索条目。本仓库演示数据均为虚构，请勿当作真人履历。
 
+## 站长 Admin 后台
+
+网页上没有注册入口。在 `.env`（本地）或 `.env.production`（部署）里填写 `ADMIN_PHONE`（中国大陆 11 位手机号）和 `ADMIN_PASSWORD`（8 到 72 位），然后执行 `pnpm admin:create`。`scripts/deploy.sh` 在简历入库之后会自动做这一步。浏览器打开 `/admin/login`。
+
+命令可重复执行：没有账号就创建；手机号或密码和配置不一致就更新，并作废已有的站长登录。全库只有一个站长账号。登录每 IP 每 15 分钟最多尝试 10 次。
+
+同一 IP 的聊天时段默认到期后保持关闭。需要自动恢复时设置 `CHAT_IP_WINDOW_COOLDOWN_MS`（毫秒），`0` 表示只能在后台或 `pnpm ip:reset` 手动解除。共用出口 IP 时可以设为 `86400000`（24 小时）。
+
 ## 部署
 
-阿里云 ECS 一键部署见 [docs/deploy-aliyun.md](docs/deploy-aliyun.md)。
+阿里云 ECS 一键部署见 [docs/deploy-aliyun.md](docs/deploy-aliyun.md)。克隆地址是 `git@github.com:inkwellio/resume-qa-agent.git`。
 
 ## 许可证
 

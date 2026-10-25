@@ -3,8 +3,7 @@ import { basename, join, resolve, sep } from "node:path";
 import type { StreamFn } from "@earendil-works/pi-agent-core";
 import {
   createEmbeddingClient,
-  loadProfile,
-  loadResumeDirectory,
+  createResumeCache,
   searchResume,
   VECTOR_DIMENSION,
   type Profile,
@@ -26,6 +25,29 @@ import { sanitizeErrorMessage } from "./transcript.js";
 import { AUTH_COOKIE, AuthError, authCookie, CODE_TTL_SECONDS, RESEND_SECONDS, type EmailAuth, type EmailIdentity } from "./email-auth.js";
 
 const VISITOR_COOKIE = "resume_visitor";
+
+/** 后端直接托管前端时使用。Docker 部署由 Nginx 设置同样的头。 */
+const PAGE_SECURITY_HEADERS: Record<string, string> = {
+  "Content-Security-Policy": [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; "),
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+};
+
+function setPageSecurityHeaders(res: Response): void {
+  for (const [name, value] of Object.entries(PAGE_SECURITY_HEADERS)) res.setHeader(name, value);
+}
 const DISLIKE_REASONS = ["信息不准确", "没回答到点上", "其他"] as const;
 
 export interface AppDeps {
@@ -94,11 +116,12 @@ export function createLookup(config: AppConfig, vector: VectorStore): ResumeLook
     apiKey: config.embeddingApiKey,
     ...(config.embeddingTimeoutMs !== undefined ? { timeoutMs: config.embeddingTimeoutMs } : {}),
   });
+  const resume = createResumeCache(config.resumeDir);
   return {
-    getProfile: () => loadProfile(config.resumeDir),
+    getProfile: () => resume.profile(),
     // 按 id 直接读原文，不走向量。索引没建好时「查看详情」仍然可用。
     getById: (id) => {
-      const chunk = loadResumeDirectory(config.resumeDir).chunks.find((item) => item.id === id);
+      const chunk = resume.directory().chunks.find((item) => item.id === id);
       return Promise.resolve(chunk ?? null);
     },
     search: async (query, signal) => {
@@ -208,7 +231,7 @@ export function createApp(config: AppConfig, deps: AppDeps): Express {
     next();
   });
 
-  mountAdminRoutes(app, { accounts: adminAccounts, cookieSecure: config.cookieSecure, ipBans, directory: adminDirectory, protection });
+  mountAdminRoutes(app, { accounts: adminAccounts, cookieSecure: config.cookieSecure, ipBans, directory: adminDirectory, protection, clientIp });
 
   app.use("/api/auth", (req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
@@ -277,10 +300,7 @@ export function createApp(config: AppConfig, deps: AppDeps): Express {
         next();
         return;
       }
-      const current = readCookie(req.header("cookie"), VISITOR_COOKIE);
-      const id = await deps.business.ensureVisitor(current);
-      res.locals.visitorId = id;
-      if (id !== current) res.append("Set-Cookie", visitorCookie(id, config.cookieSecure));
+      // 公开接口不需要访客身份，不再为每个没带 cookie 的请求建访客行。
       next();
     } catch (error) {
       authFailure(res, error);
@@ -289,9 +309,10 @@ export function createApp(config: AppConfig, deps: AppDeps): Express {
 
   app.get("/api/profile", (_req, res) => {
     try {
-      res.json(loadProfile(config.resumeDir));
+      res.json(lookup.getProfile());
     } catch (error) {
-      res.status(500).json({ message: error instanceof Error ? error.message : "读取档案失败" });
+      console.error("读取档案失败", error);
+      res.status(500).json({ message: "读取档案失败" });
     }
   });
 
@@ -353,7 +374,8 @@ export function createApp(config: AppConfig, deps: AppDeps): Express {
       }
       res.status(404).json({ message: toolText(result) || "简历里没有这个项目。" });
     } catch (error) {
-      res.status(500).json({ message: error instanceof Error ? error.message : "读取项目失败" });
+      console.error("读取项目失败", error);
+      res.status(500).json({ message: "读取项目失败" });
     }
   });
 
@@ -540,7 +562,7 @@ export function createApp(config: AppConfig, deps: AppDeps): Express {
         .finally(() => { renewing = false; });
     }, limits.heartbeatMs);
     try {
-      const profile: Profile = loadProfile(config.resumeDir);
+      const profile: Profile = lookup.getProfile();
       const turnTools = createResumeTools(lookup);
       writeEvent(res, { event: "session", data: { sessionId: session.id } }, isClosed);
       saved = await streamChat({
@@ -609,7 +631,7 @@ export function createApp(config: AppConfig, deps: AppDeps): Express {
     }
     let filename = requested;
     try {
-      const profile = loadProfile(config.resumeDir);
+      const profile = lookup.getProfile();
       if (basename(profile.resumePdf) === requested && profile.resumePdfFilename) {
         filename = profile.resumePdfFilename;
       }
@@ -625,7 +647,7 @@ export function createApp(config: AppConfig, deps: AppDeps): Express {
   });
 
   if (existsSync(config.frontendDist)) {
-    app.use(express.static(config.frontendDist));
+    app.use(express.static(config.frontendDist, { setHeaders: (res) => setPageSecurityHeaders(res) }));
     app.use((req, res, next) => {
       if (req.method !== "GET") {
         next();
@@ -635,11 +657,24 @@ export function createApp(config: AppConfig, deps: AppDeps): Express {
         next();
         return;
       }
+      setPageSecurityHeaders(res);
       res.sendFile(join(config.frontendDist, "index.html"), (error) => {
         if (error) next();
       });
     });
   }
+
+  // 路由里没接住的错误统一回 JSON，不把堆栈或内部信息交给前端。
+  app.use((error: unknown, _req: Request, res: Response, next: (error?: unknown) => void) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    console.error("请求处理失败", sanitizeErrorMessage(error instanceof Error ? error.message : undefined));
+    const status = typeof error === "object" && error !== null && "status" in error
+      && typeof error.status === "number" && error.status >= 400 && error.status < 500 ? error.status : 500;
+    res.status(status).json({ message: status === 500 ? "服务出了点问题，请稍后再试。" : "请求格式不正确。" });
+  });
 
   return app;
 }

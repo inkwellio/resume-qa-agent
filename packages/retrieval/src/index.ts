@@ -4,7 +4,7 @@ export { parseMarkdownEntry } from "./markdown.js";
 export { parsePeriod } from "./period.js";
 export { createPgVectorStore } from "./pg-vector-store.js";
 export { segmentDocument, segmentQuery, segmentText } from "./segment.js";
-export { loadProfile, loadResumeDirectory } from "./sources.js";
+export { createResumeCache, loadProfile, loadResumeDirectory, type ResumeCache } from "./sources.js";
 export { rebuildResumeIndex, searchResume } from "./store.js";
 export { VECTOR_DIMENSION } from "./vector-store.js";
 export type { VectorRecord, VectorStore } from "./vector-store.js";

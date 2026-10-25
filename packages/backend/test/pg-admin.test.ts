@@ -87,13 +87,14 @@ describe("Postgres 站长封禁与问答", () => {
       const exhausted = await chat();
       expect(exhausted.status).toBe(429);
       expect(await exhausted.json()).toMatchObject({ code: "ip_time_exhausted" });
-      const setup = await fetch(`${url}/api/admin/setup`, {
+      expect(await createPostgresAdminAccounts(pool).sync("13800138000", "correct-horse")).toBe("created");
+      const login = await fetch(`${url}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: "13800138000", password: "correct-horse", confirmPassword: "correct-horse" }),
+        body: JSON.stringify({ phone: "13800138000", password: "correct-horse" }),
       });
-      expect(setup.status).toBe(200);
-      const cookie = setup.headers.getSetCookie().find((item) => item.startsWith("resume_admin_session="))?.split(";")[0];
+      expect(login.status).toBe(200);
+      const cookie = login.headers.getSetCookie().find((item) => item.startsWith("resume_admin_session="))?.split(";")[0];
       if (!cookie) throw new Error("没有站长会话");
       const ban = await fetch(`${url}/api/admin/ips/ban`, {
         method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" },

@@ -1,7 +1,7 @@
 import { Alert } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parseAdminRoute, type AdminRoute } from "../admin-path";
-import { AdminLogin, AdminSetup } from "./admin/AdminLogin";
+import { AdminLogin } from "./admin/AdminLogin";
 import { AdminShell } from "./admin/AdminShell";
 import { IpsPage } from "./admin/IpsPage";
 import { PlaceholderPage } from "./admin/PlaceholderPage";
@@ -10,7 +10,7 @@ import { SessionsPage } from "./admin/SessionsPage";
 import { UsersPage } from "./admin/UsersPage";
 import { adminFetch } from "./admin/client";
 
-type Gate = { status: "loading" } | { status: "anon"; needsSetup: boolean } | { status: "in" };
+type Gate = { status: "loading" } | { status: "anon" } | { status: "in" };
 
 function useAdminLocation() {
   const [loc, setLoc] = useState(() => ({
@@ -35,7 +35,7 @@ function useAdminLocation() {
 }
 
 function isAppPage(route: AdminRoute): boolean {
-  return route.page !== "login" && route.page !== "setup" && route.page !== "missing";
+  return route.page !== "login" && route.page !== "missing";
 }
 
 export function AdminPage() {
@@ -50,13 +50,13 @@ export function AdminPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void adminFetch<{ authenticated: boolean; needsSetup: boolean }>("/api/admin/session", { signal: controller.signal })
+    void adminFetch<{ authenticated: boolean }>("/api/admin/session", { signal: controller.signal })
       .then((body) => {
         if (controller.signal.aborted) return;
-        setGate(body.authenticated ? { status: "in" } : { status: "anon", needsSetup: body.needsSetup });
+        setGate(body.authenticated ? { status: "in" } : { status: "anon" });
       })
       .catch(() => {
-        if (!controller.signal.aborted) setGate({ status: "anon", needsSetup: false });
+        if (!controller.signal.aborted) setGate({ status: "anon" });
       });
     return () => controller.abort();
   }, []);
@@ -64,15 +64,15 @@ export function AdminPage() {
   const onUnauthorized = useCallback(() => {
     const here = locationRef.current.pathname + locationRef.current.search;
     if (isAppPage(parseAdminRoute(locationRef.current.pathname, locationRef.current.search))) pendingRef.current = here;
-    setGate({ status: "anon", needsSetup: false });
+    setGate({ status: "anon" });
   }, []);
 
   useEffect(() => {
     if (gate.status === "loading") return;
     const here = pathname + search;
     if (gate.status === "in") {
-      if (route.page === "login" || route.page === "setup") {
-        const next = pendingRef.current && pendingRef.current !== "/admin/login" && pendingRef.current !== "/admin/setup"
+      if (route.page === "login") {
+        const next = pendingRef.current && pendingRef.current !== "/admin/login"
           ? pendingRef.current
           : "/admin";
         pendingRef.current = null;
@@ -80,10 +80,9 @@ export function AdminPage() {
       }
       return;
     }
-    const target = gate.needsSetup ? "/admin/setup" : "/admin/login";
-    if ((gate.needsSetup && route.page === "setup") || (!gate.needsSetup && route.page === "login")) return;
+    if (route.page === "login") return;
     if (isAppPage(route)) pendingRef.current = here;
-    navigate(target, "replace");
+    navigate("/admin/login", "replace");
   }, [gate, route, pathname, search, navigate]);
 
   function enter() {
@@ -93,7 +92,7 @@ export function AdminPage() {
   async function logout() {
     pendingRef.current = null;
     try { await adminFetch("/api/admin/logout", { method: "POST" }); } catch { /* 会话清不掉也先离开后台。 */ }
-    setGate({ status: "anon", needsSetup: false });
+    setGate({ status: "anon" });
     navigate("/admin/login");
   }
 
@@ -101,10 +100,9 @@ export function AdminPage() {
     return <div className="admin-auth"><p className="admin-status admin-auth-wait">正在确认登录状态…</p></div>;
   }
   if (gate.status === "anon") {
-    if (gate.needsSetup) return route.page === "setup" ? <AdminSetup onSuccess={enter} /> : null;
     return route.page === "login" ? <AdminLogin onSuccess={enter} /> : null;
   }
-  if (route.page === "login" || route.page === "setup") return null;
+  if (route.page === "login") return null;
 
   return (
     <AdminShell

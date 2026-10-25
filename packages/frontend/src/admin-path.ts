@@ -7,7 +7,6 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 
 export type AdminRoute =
   | { page: "login" }
-  | { page: "setup" }
   | { page: "users" }
   | { page: "sessions"; userId: string | null; email: string | null; userIdInvalid: boolean }
   | { page: "session"; id: string }
@@ -33,7 +32,6 @@ function readEmail(params: URLSearchParams): string | null {
 export function parseAdminRoute(pathname: string, search = ""): AdminRoute {
   const path = stripSlash(pathname);
   if (path === "/admin/login") return { page: "login" };
-  if (path === "/admin/setup") return { page: "setup" };
   if (path === "/admin") return { page: "users" };
   if (path === "/admin/ips") return { page: "ips" };
   if (path === "/admin/feedback") return { page: "feedback" };

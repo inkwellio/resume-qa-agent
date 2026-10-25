@@ -169,10 +169,18 @@ export function createPostgresBusinessStore(pool: Pool): BusinessStore {
              $2::text = ''
              OR s.title ILIKE $3 ESCAPE '\\'
              OR EXISTS (
+               -- 只搜正文：字符串形式的 content，以及 content 里 type 为 text 的片段。
+               -- 不搜整段 JSON，否则 role、content 这类字段名和思考、工具参数都会命中。
                SELECT 1 FROM messages m
                WHERE m.session_id = s.id
                  AND m.agent_message->>'role' IN ('user', 'assistant')
-                 AND m.agent_message::text ILIKE $3 ESCAPE '\\'
+                 AND (
+                   (jsonb_typeof(m.agent_message->'content') = 'string' AND m.agent_message->>'content' ILIKE $3 ESCAPE '\\')
+                   OR EXISTS (
+                     SELECT 1 FROM jsonb_path_query(m.agent_message, '$.content[*] ? (@.type == "text").text') AS part(value)
+                     WHERE part.value #>> '{}' ILIKE $3 ESCAPE '\\'
+                   )
+                 )
              )
            )
          ORDER BY s.updated_at DESC
@@ -188,21 +196,20 @@ export function createPostgresBusinessStore(pool: Pool): BusinessStore {
     },
 
     async getSession(visitorId: string, sessionId: string): Promise<SessionDetail | null> {
-      const loaded = await this.loadSession(visitorId, sessionId);
-      if (!loaded) return null;
-      const ratings = await loadRatings(pool, sessionId);
+      if (!UUID_PATTERN.test(sessionId)) return null;
       const summary = await pool.query<SessionDbRow>(
         `SELECT id, title, created_at, updated_at FROM sessions WHERE id = $1 AND visitor_id = $2`,
         [sessionId, visitorId],
       );
       const row = summary.rows[0];
       if (!row) return null;
+      const [rows, ratings] = await Promise.all([loadRows(pool, sessionId), loadRatings(pool, sessionId)]);
       return {
         id: row.id,
         title: row.title,
         createdAt: iso(row.created_at),
         updatedAt: iso(row.updated_at),
-        messages: projectMessages(loaded.rows, ratings),
+        messages: projectMessages(rows, ratings),
       };
     },
 
@@ -234,22 +241,25 @@ export function createPostgresBusinessStore(pool: Pool): BusinessStore {
           [input.sessionId, ids],
         );
         await client.query("UPDATE messages SET seq = -1 - seq WHERE session_id = $1", [input.sessionId]);
-        for (const row of input.rows) {
+        if (input.rows.length) {
+          // 一条语句写完整轮，不按行往返数据库。
           await client.query(
             `INSERT INTO messages (id, session_id, seq, format_version, agent_message, ui_details)
-             VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+             SELECT r.id, $1, r.seq, r.format_version, r.agent_message::jsonb, r.ui_details::jsonb
+             FROM unnest($2::uuid[], $3::int[], $4::text[], $5::text[], $6::text[])
+               AS r(id, seq, format_version, agent_message, ui_details)
              ON CONFLICT (id) DO UPDATE SET
                seq = EXCLUDED.seq,
                format_version = EXCLUDED.format_version,
                agent_message = EXCLUDED.agent_message,
                ui_details = EXCLUDED.ui_details`,
             [
-              row.id,
               input.sessionId,
-              row.seq,
-              row.formatVersion,
-              JSON.stringify(row.agentMessage),
-              row.uiDetails ? JSON.stringify(row.uiDetails) : null,
+              ids,
+              input.rows.map((row) => row.seq),
+              input.rows.map((row) => row.formatVersion),
+              input.rows.map((row) => JSON.stringify(row.agentMessage)),
+              input.rows.map((row) => (row.uiDetails ? JSON.stringify(row.uiDetails) : null)),
             ],
           );
         }
