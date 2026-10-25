@@ -53,7 +53,16 @@ export function loadConfig(): AppConfig {
     if (!Number.isSafeInteger(value) || value < 1) throw new Error(`${name} 必须为正整数`);
     return value;
   };
+  const nonNegative = (name: string, fallback: number) => {
+    const value = integer(name, fallback);
+    if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} 必须为非负整数`);
+    return value;
+  };
   const quotaTimeZone = process.env.QUOTA_TIME_ZONE?.trim() || DEFAULT_ABUSE_LIMITS.quotaTimeZone;
+  const devMailer = process.env.EMAIL_DEV_MAILER === "1";
+  if (devMailer && process.env.NODE_ENV === "production") {
+    throw new Error("生产环境不能设置 EMAIL_DEV_MAILER=1：验证码只会写进日志，用户收不到。请改为 0 并配置阿里云发信。");
+  }
   const authSecret = process.env.EMAIL_AUTH_SECRET?.trim() || "";
   if (authSecret && authSecret.length < 32) throw new Error("EMAIL_AUTH_SECRET 至少需要 32 个字符。");
   const accountName = process.env.ALIYUN_DM_ACCOUNT_NAME?.trim() || "";
@@ -71,6 +80,7 @@ export function loadConfig(): AppConfig {
     dailyRequestsPerVisitor: positive("CHAT_DAILY_REQUESTS_PER_VISITOR", DEFAULT_ABUSE_LIMITS.dailyRequestsPerVisitor),
     turnTimeoutMs: positive("CHAT_TURN_TIMEOUT_MS", DEFAULT_ABUSE_LIMITS.turnTimeoutMs),
     ipChatWindowMs: positive("CHAT_IP_WINDOW_MS", DEFAULT_ABUSE_LIMITS.ipChatWindowMs),
+    ipChatCooldownMs: nonNegative("CHAT_IP_WINDOW_COOLDOWN_MS", DEFAULT_ABUSE_LIMITS.ipChatCooldownMs),
     quotaTimeZone,
   };
   return {
@@ -103,7 +113,7 @@ export function loadConfig(): AppConfig {
       accessKeySecret: process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET?.trim() || "",
       securityToken: process.env.ALIBABA_CLOUD_SECURITY_TOKEN?.trim() || "",
       accountName,
-      devMailer: process.env.EMAIL_DEV_MAILER === "1",
+      devMailer,
       dailySendLimit: positive("EMAIL_DAILY_SEND_LIMIT", 100),
       dailySendLimitPerIp: positive("EMAIL_DAILY_SEND_LIMIT_PER_IP", 20),
     },

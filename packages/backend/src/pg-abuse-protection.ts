@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import {
-  checkConcurrency, identityHash, ipWindowExhausted, normalizeClientIp, ProtectionError, rateMax,
+  checkConcurrency, identityHash, invalidIpError, ipWindowExhausted, normalizeClientIp, ProtectionError, rateMax, rateWindow,
   type AbuseProtection, type ChatAdmission, type ProtectionOptions,
 } from "./abuse-protection.js";
 
@@ -19,9 +19,9 @@ export function createPostgresProtection(pool: Pool, options: ProtectionOptions)
              THEN clock_timestamp() + $3 * interval '1 millisecond' ELSE request_rate_windows.reset_at END
          WHERE request_rate_windows.reset_at <= clock_timestamp() OR request_rate_windows.hits < $4
          RETURNING reset_at`,
-        [scope, identityHash(key), options.rateWindowMs, rateMax(scope, options)],
+        [scope, identityHash(key), rateWindow(scope, options), rateMax(scope, options)],
       );
-      if (!result.rowCount) throw new ProtectionError(429, "rate_limited", "请求过于频繁，请稍后再试。", Math.ceil(options.rateWindowMs / 1000));
+      if (!result.rowCount) throw new ProtectionError(429, "rate_limited", "请求过于频繁，请稍后再试。", Math.ceil(rateWindow(scope, options) / 1000));
       if (Date.now() >= nextCleanup) {
         nextCleanup = Date.now() + 60_000;
         // 有索引的过期清理，不保留曾经访问过的所有 IP。计数窗口仍按数据库时间判断。
@@ -36,6 +36,13 @@ export function createPostgresProtection(pool: Pool, options: ProtectionOptions)
         await client.query("SELECT pg_advisory_xact_lock(1792800000)");
         await client.query("DELETE FROM active_chat_leases WHERE expires_at <= clock_timestamp()");
         const hashed: ChatAdmission = { ...input, ip: identityHash(input.ip) };
+        if (options.limits.ipChatCooldownMs > 0) {
+          // 到期时段过了恢复期就删掉，本次准入重新开一个时段。
+          await client.query(
+            "DELETE FROM ip_chat_windows WHERE ip_hash = $1 AND expires_at + $2 * interval '1 millisecond' <= clock_timestamp()",
+            [hashed.ip, options.limits.ipChatCooldownMs],
+          );
+        }
         const exhausted = await client.query(
           "SELECT 1 FROM ip_chat_windows WHERE ip_hash = $1 AND expires_at <= clock_timestamp()", [hashed.ip],
         );
@@ -145,7 +152,7 @@ function stamp(value: Date | string): string {
 /** 仅由服务器 CLI 调用；与准入共用事务锁，撤销旧生成租约后才移除窗口。 */
 export async function resetIpChatWindow(pool: Pool, ip: string): Promise<boolean> {
   const canonical = normalizeClientIp(ip);
-  if (canonical === "unknown") throw new Error("请输入有效的 IPv4 或 IPv6 地址。");
+  if (canonical === "unknown") throw invalidIpError();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");

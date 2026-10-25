@@ -83,3 +83,47 @@ export function loadResumeDirectory(dir: string): { profile: Profile; chunks: Re
 export function loadProfile(dir: string): Profile {
   return readProfileFile(join(dir, "profile.json"));
 }
+
+export interface ResumeCache {
+  profile(): Profile;
+  directory(): { profile: Profile; chunks: ResumeChunk[] };
+}
+
+/**
+ * 按目录内文件的路径、修改时间和大小缓存解析结果。至多每隔 checkIntervalMs 检查一次文件状态，
+ * 文件变了才重新读取和切块。解析失败不缓存，下次照常重试。
+ */
+export function createResumeCache(dir: string, checkIntervalMs = 1000, now = Date.now): ResumeCache {
+  let signature = "";
+  let checkedAt = -Infinity;
+  let profile: Profile | null = null;
+  let directory: { profile: Profile; chunks: ResumeChunk[] } | null = null;
+  const refresh = () => {
+    const time = now();
+    if (time - checkedAt < checkIntervalMs) return;
+    const files: string[] = [];
+    collectFiles(dir, files);
+    const next = files.sort().map((file) => {
+      const stat = statSync(file);
+      return `${file}:${stat.mtimeMs}:${stat.size}`;
+    }).join("|");
+    checkedAt = time;
+    if (next !== signature) {
+      signature = next;
+      profile = null;
+      directory = null;
+    }
+  };
+  return {
+    profile() {
+      refresh();
+      profile ??= directory?.profile ?? loadProfile(dir);
+      return profile;
+    },
+    directory() {
+      refresh();
+      directory ??= loadResumeDirectory(dir);
+      return directory;
+    },
+  };
+}

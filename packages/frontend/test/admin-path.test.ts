@@ -19,7 +19,7 @@ describe("站长路径", () => {
     assert.deepEqual(parseAdminRoute("/admin"), { page: "users" });
     assert.deepEqual(parseAdminRoute("/admin/"), { page: "users" });
     assert.deepEqual(parseAdminRoute("/admin/login"), { page: "login" });
-    assert.deepEqual(parseAdminRoute("/admin/setup"), { page: "setup" });
+    assert.deepEqual(parseAdminRoute("/admin/setup"), { page: "missing" });
     assert.deepEqual(parseAdminRoute("/admin/ips"), { page: "ips" });
     assert.deepEqual(parseAdminRoute("/admin/feedback"), { page: "feedback" });
     assert.deepEqual(parseAdminRoute("/admin/usage"), { page: "usage" });

@@ -10,7 +10,7 @@
 
 Nginx 已为 SSE（`/api/chat`）关闭缓冲和 gzip，超时调到 600 秒，流式回答会逐字出现。
 
-聊天已强制要求邮箱验证码登录。部署前请按 [邮箱验证码登录](../README.md#邮箱验证码登录) 配置阿里云杭州区域邮件推送、RAM AccessKey、触发类发信地址和 `EMAIL_AUTH_SECRET`；未配置时可浏览公开简历，不能聊天。生产环境保持 `EMAIL_DEV_MAILER=0`（或不设置）。该变量为 `1` 时只在后端日志打印验证码，不会调用邮件推送。上线时在 `.env.production` 关闭它，并填入已验证的 `ALIYUN_DM_ACCOUNT_NAME` 与 RAM AccessKey，不用改发码或校验代码。正式上线使用 HTTPS，并设 `COOKIE_SECURE=1`。站长后台见 [站长 Admin 后台](../README.md#站长-admin-后台)：迁移后打开 `/admin/setup` 用手机号和密码注册一次，之后从 `/admin/login` 进入。不再使用 `ADMIN_TOKEN`。
+聊天已强制要求邮箱验证码登录。部署前请按 [邮箱验证码登录](../README.md#邮箱验证码登录) 配置阿里云杭州区域邮件推送、RAM AccessKey、触发类发信地址和 `EMAIL_AUTH_SECRET`；未配置时可浏览公开简历，不能聊天。生产环境保持 `EMAIL_DEV_MAILER=0`（或不设置）。该变量为 `1` 时只在后端日志打印验证码，不会调用邮件推送。上线时在 `.env.production` 关闭它，并填入已验证的 `ALIYUN_DM_ACCOUNT_NAME` 与 RAM AccessKey，不用改发码或校验代码。正式上线使用 HTTPS，并设 `COOKIE_SECURE=1`。站长后台见 [站长 Admin 后台](../README.md#站长-admin-后台)：在 `.env.production` 填写 `ADMIN_PHONE` 和 `ADMIN_PASSWORD`，`deploy.sh` 会自动创建或同步站长账号，之后从 `/admin/login` 进入。不再使用 `ADMIN_TOKEN`。网页上没有注册入口。
 
 ## 一、准备服务器
 
@@ -46,11 +46,11 @@ CFG
 
 ```bash
 # 1. 拉代码
-git clone git@github.com:inkwellio/resume-agent.git && cd resume-agent
+git clone git@github.com:inkwellio/resume-qa-agent.git && cd resume-qa-agent
 
 # 2. 填密钥
 cp .env.production.example .env.production
-nano .env.production        # 填 DEEPSEEK_API_KEY、EMBEDDING_API_KEY；POSTGRES_PASSWORD 留空会自动生成
+nano .env.production        # 填 DEEPSEEK_API_KEY、EMBEDDING_API_KEY、ADMIN_PHONE、ADMIN_PASSWORD；POSTGRES_PASSWORD 留空会自动生成
 
 # 3. 一键部署
 bash scripts/deploy.sh
@@ -59,11 +59,12 @@ bash scripts/deploy.sh
 `deploy.sh` 会依次：
 
 1. 没装 Docker 时，用**阿里云镜像源**安装 docker-ce 和 compose 插件；
-2. 检查 `.env.production`，数据库密码为空时自动生成随机密码；
+2. 检查 `.env.production`。数据库密码为空时自动生成随机密码；`ADMIN_PHONE` 或 `ADMIN_PASSWORD` 为空则停止；
 3. `docker compose up -d --build` 构建并启动；
 4. 等 db、backend、web 全部健康；
 5. 执行简历入库（输出「已为「林知夏」写入 N 条片段」，N 取决于 entries.json）；
-6. 打印访问地址，浏览器打开 `http://<公网IP>/` 即可。
+6. 按 `ADMIN_PHONE` / `ADMIN_PASSWORD` 创建或同步站长账号（可重复执行）；
+7. 打印访问地址。浏览器打开 `http://<公网IP>/`，站长从 `/admin/login` 进入。
 
 ### Docker 镜像加速（大陆地域强烈建议）
 
@@ -122,7 +123,7 @@ gunzip -c backups/resume-2026-10-18.sql.gz | dc exec -T db psql -U resume resume
 可以用 `crontab -e` 加一行每天凌晨备份（路径换成你的仓库目录）：
 
 ```
-0 3 * * * cd /root/resume-agent && docker compose -f docker-compose.prod.yml --env-file .env.production exec -T db pg_dump -U resume resume | gzip > backups/resume-$(date +\%F).sql.gz
+0 3 * * * cd /root/resume-qa-agent && docker compose -f docker-compose.prod.yml --env-file .env.production exec -T db pg_dump -U resume resume | gzip > backups/resume-$(date +\%F).sql.gz
 ```
 
 **停止 / 彻底删除**：

@@ -24,6 +24,26 @@ describe("防刷策略", () => {
     await expect(protection.acquire(admission("email-d", "other-ip"))).resolves.toHaveProperty("id");
   });
 
+  it("设置恢复期后，到期时段过了这段时间会重新开放", async () => {
+    let now = 0;
+    const protection = guard({ ipChatWindowMs: 100, ipChatCooldownMs: 50 }, () => now);
+    await protection.release(await protection.acquire(admission()));
+    now = 100;
+    await expect(protection.acquire(admission())).rejects.toMatchObject({ code: "ip_time_exhausted" });
+    now = 149;
+    await expect(protection.acquire(admission())).rejects.toMatchObject({ code: "ip_time_exhausted" });
+    now = 150;
+    const again = await protection.acquire(admission());
+    expect(again.ipWindowDeadline).toBe(250);
+  });
+
+  it("站长登录按 15 分钟窗口单独计数，不影响聊天限流", async () => {
+    const protection = guard();
+    for (let i = 0; i < 10; i += 1) await protection.rate("admin-login-ip", "203.0.113.8");
+    await expect(protection.rate("admin-login-ip", "203.0.113.8")).rejects.toMatchObject({ status: 429, code: "rate_limited" });
+    await expect(protection.rate("chat-ip", "203.0.113.8")).resolves.toBeUndefined();
+  });
+
   it("时段到期时不再续租，释放租约也不能重新获得时段", async () => {
     let now = 0;
     const protection = guard({ ipChatWindowMs: 100, leaseMs: 1000 }, () => now);

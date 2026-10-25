@@ -16,6 +16,7 @@
     "migrate": "pnpm --filter @resume/backend migrate",
     "feedback:report": "pnpm --filter @resume/backend feedback:report",
     "ip:reset": "pnpm --filter @resume/backend ip:reset",
+    "admin:create": "pnpm --filter @resume/backend admin:create",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:unit": "node --test scripts/*.test.mjs && node --experimental-strip-types --test packages/frontend/test/*.test.ts && pnpm --filter @resume/backend exec tsx --tsconfig ../frontend/tsconfig.json --test ../frontend/test/*.test.tsx && pnpm --filter @resume/retrieval test:unit && pnpm --filter @resume/backend test:unit",
     "test:integration": "pnpm --filter @resume/retrieval test:integration && pnpm --filter @resume/backend test:integration",

@@ -12,5 +12,6 @@ backups/
 eval/*.report.json
 *.log
 *.log.*
+*.log.err
 .DS_Store
 Thumbs.db

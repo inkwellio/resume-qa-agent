@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMemoryProtection, DEFAULT_ABUSE_LIMITS, type AbuseLimits } from "../src/abuse-protection.js";
+import { createMemoryAdminAccounts, type AdminAccountStore } from "../src/admin-accounts.js";
 import type { AdminDirectory } from "../src/admin-directory.js";
 import { createApp, type AppDeps } from "../src/app.js";
 import type { BusinessStore, LoadedSession } from "../src/business-store.js";
@@ -12,10 +13,11 @@ import type { AppConfig } from "../src/config.js";
 import { createMemoryIpBans } from "../src/ip-ban.js";
 import { AGENT_FORMAT_VERSION, visibleTurns, type StoredRow } from "../src/transcript.js";
 
-const OWNER = { phone: "13800138000", password: "correct-horse", confirmPassword: "correct-horse" };
+const OWNER = { phone: "13800138000", password: "correct-horse" };
 
-async function ownerCookie(url: string): Promise<string> {
-  const response = await fetch(`${url}/api/admin/setup`, {
+async function ownerCookie(url: string, accounts: AdminAccountStore): Promise<string> {
+  await accounts.sync(OWNER.phone, OWNER.password);
+  const response = await fetch(`${url}/api/admin/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(OWNER),
@@ -42,7 +44,7 @@ function limits(overrides: Partial<AbuseLimits> = {}): AbuseLimits {
   };
 }
 
-function fixture(configOverrides: Partial<AppConfig> = {}, depsOverrides: Partial<AppDeps> = {}, now = Date.now) {
+function fixture(configOverrides: Partial<AppConfig> = {}, depsOverrides: Partial<AppDeps> = {}, now = Date.now, injectAdmin = true) {
   const dir = mkdtempSync(join(tmpdir(), "resume-agent-admin-"));
   writeFileSync(join(dir, "profile.json"), JSON.stringify({ name: "测试候选人", headline: "开发工程师" }));
   const session: LoadedSession = { id: crypto.randomUUID(), title: "", rows: [] };
@@ -62,6 +64,7 @@ function fixture(configOverrides: Partial<AppConfig> = {}, depsOverrides: Partia
   const sendCode = vi.fn(async () => {});
   const authenticate = vi.fn(async () => ({ email: "verified@example.com", visitorId: "visitor-1" }));
   const abuse = configOverrides.abuseLimits ?? limits();
+  const adminAccounts = depsOverrides.adminAccounts ?? (injectAdmin ? createMemoryAdminAccounts() : undefined);
   const config: AppConfig = {
     port: 0, databaseUrl: "unused", cookieSecure: false,
     embeddingBaseUrl: "http://127.0.0.1:9", embeddingModel: "test", embeddingApiKey: "", embeddingDimension: 1024,
@@ -79,6 +82,7 @@ function fixture(configOverrides: Partial<AppConfig> = {}, depsOverrides: Partia
     protection,
     auth: { configured: true, authenticate, sendCode, verify: async () => { throw new Error("夹具不校验验证码"); }, logout: async () => {} },
     ...depsOverrides,
+    ...(adminAccounts ? { adminAccounts } : {}),
   };
   let server;
   try {
@@ -88,7 +92,7 @@ function fixture(configOverrides: Partial<AppConfig> = {}, depsOverrides: Partia
     throw error;
   }
   return {
-    business, authenticate, sendCode, protection, deps,
+    business, authenticate, sendCode, protection, deps, adminAccounts,
     async start() {
       await new Promise<void>((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
       const address = server.address();
@@ -132,7 +136,7 @@ describe("可见问答", () => {
 });
 
 describe("站长鉴权", () => {
-  it("没有账号时可以注册并登录，已有账号不能再注册，退出后接口 401", async () => {
+  it("网页没有注册入口，命令行同步的账号可以登录，退出后接口 401", async () => {
     const directory: AdminDirectory = {
       listUsers: vi.fn(async () => ({
         users: [{ userId: "user-1", email: "owner@example.com", createdAt: "2026-01-01T00:00:00.000Z", visitorCount: 1, sessionCount: 2, lastSessionAt: null }],
@@ -149,21 +153,16 @@ describe("站长鉴权", () => {
       body: JSON.stringify(body),
     });
     try {
-      expect(await (await fetch(`${url}/api/admin/session`)).json()).toEqual({ authenticated: false, needsSetup: true });
+      expect(await (await fetch(`${url}/api/admin/session`)).json()).toEqual({ authenticated: false });
       for (const path of ["/api/admin/users", "/api/admin/sessions", "/api/admin/ips"]) {
         expect((await fetch(`${url}${path}`)).status).toBe(401);
       }
       expect((await fetch(`${url}/api/admin/users`, { headers: { Authorization: "Bearer " + "a".repeat(32) } })).status).toBe(401);
-      const badPhone = await post("/api/admin/setup", { phone: "1380013", password: "correct-horse", confirmPassword: "correct-horse" });
-      expect(badPhone.status).toBe(400);
-      expect(await badPhone.json()).toMatchObject({ message: "请输入 11 位中国大陆手机号" });
-      const mismatch = await post("/api/admin/setup", { phone: OWNER.phone, password: "correct-horse", confirmPassword: "other-horse" });
-      expect(mismatch.status).toBe(400);
-      expect(await mismatch.json()).toMatchObject({ message: "两次密码不一致" });
-      const cookie = await ownerCookie(url);
-      expect(await (await fetch(`${url}/api/admin/session`, { headers: { Cookie: cookie } })).json()).toEqual({ authenticated: true, needsSetup: false });
-      const again = await post("/api/admin/setup", OWNER);
-      expect(again.status).toBe(409);
+      const registration = await post("/api/admin/setup", { phone: OWNER.phone, password: OWNER.password, confirmPassword: OWNER.password });
+      expect(registration.status).toBe(401);
+      const cookie = await ownerCookie(url, f.adminAccounts);
+      expect(await (await fetch(`${url}/api/admin/session`, { headers: { Cookie: cookie } })).json()).toEqual({ authenticated: true });
+      expect(await f.adminAccounts.sync(OWNER.phone, OWNER.password)).toBe("unchanged");
       const wrong = await post("/api/admin/login", { phone: "13900139000", password: "correct-horse" });
       const badPassword = await post("/api/admin/login", { phone: OWNER.phone, password: "wrong-horse" });
       expect(wrong.status).toBe(401);
@@ -191,11 +190,11 @@ describe("站长鉴权", () => {
     const protection = createMemoryProtection({ rateWindowMs: 1000, rateMax: 10, limits: limits() });
     try {
       expect(() => fixture({}, { protection })).toThrow(/黑名单/);
-      expect(() => fixture({}, { protection, ipBans: createMemoryIpBans() })).toThrow(/站长账号/);
+      expect(() => fixture({}, { protection, ipBans: createMemoryIpBans() }, Date.now, false)).toThrow(/站长账号/);
       expect(() => fixture({}, {
         protection,
         ipBans: createMemoryIpBans(),
-        adminAccounts: { count: async () => 0, create: async () => ({ id: "1" }), findByPhone: async () => null, createSession: async () => ({ token: "ab" }), authenticate: async () => null, revoke: async () => {} },
+        adminAccounts: { sync: async () => "unchanged" as const, findByPhone: async () => null, createSession: async () => ({ token: "ab" }), authenticate: async () => null, revoke: async () => {} },
       })).toThrow(/站长查询/);
     } finally { vi.unstubAllEnvs(); }
   });
@@ -223,7 +222,7 @@ describe("会话客户端 IP", () => {
     const f = fixture({}, { adminDirectory: directory });
     const url = await f.start();
     try {
-      const cookie = await ownerCookie(url);
+      const cookie = await ownerCookie(url, f.adminAccounts);
       const listed = await fetch(`${url}/api/admin/sessions`, { headers: { Cookie: cookie } });
       expect(listed.status).toBe(200);
       expect(await listed.json()).toMatchObject({
@@ -243,7 +242,7 @@ describe("永久封禁与解除", () => {
     const open = fixture({ trustProxy: false });
     const openUrl = await open.start();
     try {
-      const openCookie = await ownerCookie(openUrl);
+      const openCookie = await ownerCookie(openUrl, open.adminAccounts);
       const ban = await fetch(`${openUrl}/api/admin/ips/ban`, {
         method: "POST", headers: authed(openCookie), body: JSON.stringify({ ip: "::ffff:203.0.113.10", note: "刷接口" }),
       });
@@ -257,7 +256,7 @@ describe("永久封禁与解除", () => {
 
     const f = fixture({ trustProxy: true });
     const url = await f.start();
-    const cookie = await ownerCookie(url);
+    const cookie = await ownerCookie(url, f.adminAccounts);
     const forwarded = (path: string, ip: string, init: RequestInit = {}) => fetch(`${url}${path}`, {
       ...init,
       headers: { "X-Forwarded-For": ip, ...(init.headers ?? {}) },
@@ -295,7 +294,7 @@ describe("永久封禁与解除", () => {
     const protection = createMemoryProtection({ rateWindowMs: 60_000, rateMax: 1000, limits: abuse }, () => now);
     const f = fixture({ trustProxy: true, abuseLimits: abuse }, { protection });
     const url = await f.start();
-    const cookie = await ownerCookie(url);
+    const cookie = await ownerCookie(url, f.adminAccounts);
     const ip = "203.0.113.77";
     const chat = () => fetch(`${url}/api/chat`, {
       method: "POST",

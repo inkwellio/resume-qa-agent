@@ -4,6 +4,19 @@
 
 ## [未发布]
 
+### 安全加固与部署
+
+- 站长账号改为命令行创建：按配置里的 `ADMIN_PHONE` / `ADMIN_PASSWORD` 执行 `pnpm admin:create`，`deploy.sh` 部署时自动执行。可重复执行，配置变了就更新账号并作废已有站长登录。移除网页注册入口 `/admin/setup` 和 `/api/admin/setup`，避免上线后被抢先注册。
+- 站长登录每 IP 每 15 分钟最多尝试 10 次，在 bcrypt 之前计数，限制暴力破解和 CPU 消耗。
+- Nginx 与后端托管的前端页面增加 CSP、`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`。
+- 生产环境设置 `EMAIL_DEV_MAILER=1` 时拒绝启动。
+- 会话搜索只匹配消息正文，不再命中 JSON 字段名、思考内容和工具参数。
+- 公开接口不再为每个没带 cookie 的请求新建访客行。
+- 新增 `CHAT_IP_WINDOW_COOLDOWN_MS`：IP 时段到期后经过这段时间自动恢复，默认 `0` 保持永久关闭。
+- 简历原文按文件修改时间缓存，不再每个请求读盘和重新切块；保存会话改为一条批量写入；会话详情少一次查询；站长鉴权不再每次写库清理。
+- 未处理的路由错误统一返回 JSON，档案与项目接口不再把内部错误原文返回前端。
+- 本地运行日志（`*.log`、`*.log.err`）继续由 `.gitignore` 忽略，不入库。
+
 ### 站长 Admin 后台
 
 - 新增 `/admin` 与 `/api/admin`：查看邮箱登录用户、按用户浏览会话，并用现有可见文本逻辑展示问题与助手回答，不展示工具原文。

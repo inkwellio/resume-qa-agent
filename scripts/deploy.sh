@@ -52,10 +52,10 @@ fi
 # 2. 环境变量
 if [ ! -f "$ENV_FILE" ]; then
   cp .env.production.example "$ENV_FILE"
-  die "已生成 $ENV_FILE，请填写 DEEPSEEK_API_KEY 和 EMBEDDING_API_KEY 后重新执行。"
+  die "已生成 $ENV_FILE，请填写 DEEPSEEK_API_KEY、EMBEDDING_API_KEY、ADMIN_PHONE 和 ADMIN_PASSWORD 后重新执行。"
 fi
 get_env() { grep -E "^$1=" "$ENV_FILE" | tail -n1 | cut -d= -f2- | tr -d '"'"'"' \r'; }
-for key in DEEPSEEK_API_KEY EMBEDDING_API_KEY; do
+for key in DEEPSEEK_API_KEY EMBEDDING_API_KEY ADMIN_PHONE ADMIN_PASSWORD; do
   [ -n "$(get_env "$key")" ] || die "$ENV_FILE 里的 $key 为空，请先填写。"
 done
 if [ -z "$(get_env POSTGRES_PASSWORD)" ]; then
@@ -94,6 +94,10 @@ info "所有服务已健康。"
 info "执行简历入库 ..."
 compose exec -T backend node packages/backend/dist/ingest.js
 
+# 5.5 站长账号（按 ADMIN_PHONE / ADMIN_PASSWORD 创建或同步，可重复执行）
+info "创建 / 同步站长账号 ..."
+compose exec -T backend node packages/backend/dist/admin-create-cli.js
+
 # 6. 访问地址
 port="$(get_env HTTP_PORT)"; port="${port:-80}"
 suffix=""; [ "$port" = "80" ] || suffix=":$port"
@@ -103,4 +107,5 @@ ip="$(curl -fsS --max-time 3 http://100.100.100.200/latest/meta-data/eipv4 2>/de
 info "部署完成 ✅"
 info "  访问地址：http://${ip}${suffix}/"
 info "  本机自检：curl http://127.0.0.1${suffix}/api/health"
+info "  站长后台：http://${ip}${suffix}/admin/login（账号密码见 $ENV_FILE 的 ADMIN_PHONE / ADMIN_PASSWORD）"
 info "  查看日志：docker compose -f $COMPOSE_FILE --env-file $ENV_FILE logs -f backend"

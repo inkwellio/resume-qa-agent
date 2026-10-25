@@ -46,4 +46,19 @@ describe("防刷配置", () => {
     vi.stubEnv("CHAT_IP_WINDOW_MS", "900000");
     expect(loadConfig().abuseLimits?.ipChatWindowMs).toBe(900000);
   });
+
+  it("时段恢复期默认为 0，可以为 0，生产环境拒绝开发发信", () => {
+    vi.stubEnv("DATABASE_URL", "postgres://example/resume");
+    expect(loadConfig().abuseLimits?.ipChatCooldownMs).toBe(0);
+    vi.stubEnv("CHAT_IP_WINDOW_COOLDOWN_MS", "86400000");
+    expect(loadConfig().abuseLimits?.ipChatCooldownMs).toBe(86400000);
+    vi.stubEnv("CHAT_IP_WINDOW_COOLDOWN_MS", "0");
+    expect(loadConfig().abuseLimits?.ipChatCooldownMs).toBe(0);
+    vi.stubEnv("CHAT_IP_WINDOW_COOLDOWN_MS", "-1");
+    expect(() => loadConfig()).toThrow(/CHAT_IP_WINDOW_COOLDOWN_MS/);
+    vi.stubEnv("CHAT_IP_WINDOW_COOLDOWN_MS", "0");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("EMAIL_DEV_MAILER", "1");
+    expect(() => loadConfig()).toThrow(/EMAIL_DEV_MAILER/);
+  });
 });
