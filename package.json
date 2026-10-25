@@ -1,0 +1,33 @@
+{
+  "name": "resume-agent",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "基于简历检索的个人问答助手（开源示例版，演示数据为虚构）",
+  "packageManager": "pnpm@10.33.3",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "ingest": "pnpm --filter @resume/retrieval build && pnpm --filter @resume/backend ingest",
+    "dev": "pnpm --filter @resume/retrieval build && node scripts/dev.mjs",
+    "build": "pnpm -r --filter \"@resume/*\" build",
+    "typecheck": "pnpm -r --filter \"@resume/*\" typecheck",
+    "migrate": "pnpm --filter @resume/backend migrate",
+    "feedback:report": "pnpm --filter @resume/backend feedback:report",
+    "ip:reset": "pnpm --filter @resume/backend ip:reset",
+    "test": "pnpm test:unit && pnpm test:integration",
+    "test:unit": "node --test scripts/*.test.mjs && node --experimental-strip-types --test packages/frontend/test/*.test.ts && pnpm --filter @resume/backend exec tsx --tsconfig ../frontend/tsconfig.json --test ../frontend/test/*.test.tsx && pnpm --filter @resume/retrieval test:unit && pnpm --filter @resume/backend test:unit",
+    "test:integration": "pnpm --filter @resume/retrieval test:integration && pnpm --filter @resume/backend test:integration",
+    "test:db:init": "node scripts/test-db-init.mjs",
+    "eval:retrieval": "pnpm --filter @resume/retrieval build && pnpm --filter @resume/backend eval:retrieval",
+    "eval:security": "pnpm --filter @resume/backend eval:security",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2"
+  }
+}

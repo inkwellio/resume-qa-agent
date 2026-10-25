@@ -1,0 +1,16 @@
+{
+  "_comment": "示例档案。人物林知夏是虚构的，换成真实简历时请整份替换，并把 example 设为 false。",
+  "example": true,
+  "name": "林知夏",
+  "headline": "全栈工程师 · 做过 React 界面和 Node.js 服务（示例）",
+  "avatar": "/media/avatar.svg",
+  "skills": ["React", "Node.js", "TypeScript", "Agent 开发", "Express"],
+  "contact": {
+    "email": "lin.zhixia.example@example.com",
+    "phone": "+86 138-0000-0000",
+    "github": "https://github.com/example-lin-zhixia",
+    "website": "https://example.com/lin-zhixia"
+  },
+  "resumePdf": "/resume/example.pdf",
+  "resumePdfFilename": "林知夏-简历-示例.pdf"
+}

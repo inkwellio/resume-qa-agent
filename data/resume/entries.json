@@ -1,0 +1,85 @@
+{
+  "_comment": "示例简历条目，人物和公司都是虚构的。每条会变成一个检索片段。也可以另放 Markdown，格式见 samples/project.example.md。",
+  "entries": [
+    {
+      "id": "exp-xinghe",
+      "type": "experience",
+      "title": "星河科技 · 前端工程师",
+      "period": "2022.07 - 2024.05",
+      "tech_stack": ["React", "TypeScript", "Node.js"],
+      "text": "示例经历。在虚构公司星河科技负责协作产品的 Web 端。主要工作是把看板、评论和文件预览做成可复用的 React 模块，并和 Node.js 网关对接。2023 年把看板首屏接口从三次往返收成一次。没有带过完整的移动端团队。"
+    },
+    {
+      "id": "exp-yunqi",
+      "type": "experience",
+      "title": "云栖实验室 · 全栈工程师",
+      "period": "2024.06 - 至今",
+      "tech_stack": ["React", "Node.js", "TypeScript"],
+      "text": "示例经历。2024 年 6 月加入虚构的云栖实验室，做内部知识检索台「星图」。前端是 React，服务端是 Node.js。工作包括查询编排和引用片段展示，模型密钥只放在服务端。截至简历编写时仍在职。"
+    },
+    {
+      "id": "proj-harbor",
+      "type": "project",
+      "title": "港湾协作平台",
+      "period": "2023.03 - 2024.01",
+      "tech_stack": ["React", "TypeScript", "Node.js"],
+      "text": "示例项目。星河科技的团队协作看板，也是 2023 年之后较完整的 React 项目。林知夏负责 React 前端和一部分 Node.js BFF，包括看板列、评论线程和文件预览。用 TypeScript 收紧了接口，并把长列表改成按列分页。没有做原生 App。"
+    },
+    {
+      "id": "proj-starmap",
+      "type": "project",
+      "title": "星图检索台",
+      "period": "2024.06 - 2025.02",
+      "tech_stack": ["React", "Node.js", "TypeScript"],
+      "text": "示例项目。云栖实验室的内部检索台，属于 2024 年之后的 React 项目。同事用自然语言查实验记录，页面展示命中片段和来源。林知夏实现了 React 结果列表、筛选条，以及 Node.js 上的查询服务。简历没有写具体的向量数据库型号。"
+    },
+    {
+      "id": "proj-orders",
+      "type": "project",
+      "title": "订单同步服务",
+      "period": "2023.08 - 2024.06",
+      "tech_stack": ["Node.js", "TypeScript"],
+      "text": "示例项目。给星河科技仓储同事写的 Node.js 服务，把两个渠道的订单同步到内部表。没有 Web 界面，也没有使用 React。包含失败重试、对账日志和每天凌晨的补数任务。"
+    },
+    {
+      "id": "proj-ledger",
+      "type": "project",
+      "title": "票据归档小工具",
+      "period": "2021.04 - 2022.11",
+      "tech_stack": ["Vue", "Java"],
+      "text": "示例项目。实习期间做的内部归档页，技术栈是 Vue 和 Java。时间在 2023 年之前，不是 React 项目。只负责上传页和查询列表。"
+    },
+    {
+      "id": "skill-frontend",
+      "type": "skill",
+      "title": "前端",
+      "period": "",
+      "tech_stack": ["React", "TypeScript", "Ant Design"],
+      "text": "示例技能组。日常用 React 和 TypeScript 写中后台界面，组件库用过 Ant Design。能独立完成列表、表单和流式对话界面。"
+    },
+    {
+      "id": "skill-backend",
+      "type": "skill",
+      "title": "后端",
+      "period": "",
+      "tech_stack": ["Node.js", "Express", "TypeScript"],
+      "text": "示例技能组。服务端主要写 Node.js，用过 Express。做过 BFF、订单同步，以及把密钥留在服务端的接口。"
+    },
+    {
+      "id": "skill-agent",
+      "type": "skill",
+      "title": "Agent 与检索",
+      "period": "",
+      "tech_stack": ["TypeScript", "Node.js"],
+      "text": "示例技能组。做过带工具调用的问答界面：模型在服务端，前端只接收流式事件。简历里的实践是星图检索台，没有单独的开源框架维护经历。"
+    },
+    {
+      "id": "edu-example",
+      "type": "education",
+      "title": "示例理工大学 · 计算机科学与技术",
+      "period": "2018.09 - 2022.06",
+      "tech_stack": [],
+      "text": "示例教育经历。示例理工大学计算机科学与技术，工学学士。课程包括数据结构、计算机网络和数据库。毕业设计是一个课程资料检索小站，简历里没有展开实现细节。"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@resume/retrieval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run --exclude test/pg-vector.test.ts",
+    "test:integration": "vitest run test/pg-vector.test.ts"
+  },
+  "dependencies": {
+    "@node-rs/jieba": "^2.0.3",
+    "pg": "^8.23.0",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "@types/pg": "^8.23.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

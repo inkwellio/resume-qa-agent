@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+data/lancedb/
+.env
+.env.*
+!.env.example
+!.env.production.example
+.vite/
+backups/
+eval/*.report.json
+*.log
+*.log.*
+.DS_Store
+Thumbs.db

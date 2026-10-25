@@ -1,0 +1,132 @@
+[
+  {
+    "id": "harbor",
+    "query": "港湾协作平台用了什么前端技术？",
+    "expectedIds": [
+      "proj-harbor"
+    ]
+  },
+  {
+    "id": "harbor-detail",
+    "query": "港湾协作平台负责了哪些模块？",
+    "expectedIds": [
+      "proj-harbor"
+    ]
+  },
+  {
+    "id": "starmap",
+    "query": "星图检索台是做什么的？",
+    "expectedIds": [
+      "proj-starmap"
+    ]
+  },
+  {
+    "id": "starmap-stack",
+    "query": "星图检索台的技术栈",
+    "expectedIds": [
+      "proj-starmap"
+    ]
+  },
+  {
+    "id": "orders",
+    "query": "订单同步服务有没有 Web 界面？",
+    "expectedIds": [
+      "proj-orders"
+    ]
+  },
+  {
+    "id": "ledger",
+    "query": "票据归档小工具用了什么技术？",
+    "expectedIds": [
+      "proj-ledger"
+    ]
+  },
+  {
+    "id": "exp-xinghe",
+    "query": "星河科技的前端工作经历",
+    "expectedIds": [
+      "exp-xinghe"
+    ],
+    "filters": {
+      "type": "experience"
+    }
+  },
+  {
+    "id": "exp-yunqi",
+    "query": "云栖实验室全栈经历",
+    "expectedIds": [
+      "exp-yunqi"
+    ],
+    "filters": {
+      "type": "experience"
+    }
+  },
+  {
+    "id": "skill-frontend",
+    "query": "前端技能熟悉哪些？",
+    "expectedIds": [
+      "skill-frontend"
+    ],
+    "filters": {
+      "type": "skill"
+    }
+  },
+  {
+    "id": "skill-backend",
+    "query": "后端用过 Express 吗？",
+    "expectedIds": [
+      "skill-backend"
+    ],
+    "filters": {
+      "type": "skill"
+    }
+  },
+  {
+    "id": "skill-agent",
+    "query": "Agent 与检索相关经验",
+    "expectedIds": [
+      "skill-agent"
+    ],
+    "filters": {
+      "type": "skill"
+    }
+  },
+  {
+    "id": "education",
+    "query": "计算机科学与技术 教育背景",
+    "expectedIds": [
+      "edu-example"
+    ],
+    "filters": {
+      "type": "education"
+    }
+  },
+  {
+    "id": "react-after-2023",
+    "query": "2023 年之后的 React 项目",
+    "expectedIds": [
+      "proj-harbor",
+      "proj-starmap"
+    ]
+  },
+  {
+    "id": "missing-salary",
+    "query": "薪资期望具体金额",
+    "expectedIds": []
+  },
+  {
+    "id": "missing-availability",
+    "query": "具体到岗日期",
+    "expectedIds": []
+  },
+  {
+    "id": "unrelated-quantum",
+    "query": "拓扑量子纠错算法",
+    "expectedIds": []
+  },
+  {
+    "id": "unrelated-recipe",
+    "query": "番茄炒蛋菜谱",
+    "expectedIds": []
+  }
+]
