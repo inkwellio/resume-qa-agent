@@ -44,7 +44,7 @@ function limits(overrides: Partial<AbuseLimits> = {}): AbuseLimits {
   };
 }
 
-function fixture(configOverrides: Partial<AppConfig> = {}, depsOverrides: Partial<AppDeps> = {}, now = Date.now) {
+function fixture(configOverrides: Partial<AppConfig> = {}, depsOverrides: Partial<AppDeps> = {}, now = Date.now, injectAdmin = true) {
   const dir = mkdtempSync(join(tmpdir(), "resume-agent-admin-"));
   writeFileSync(join(dir, "profile.json"), JSON.stringify({ name: "测试候选人", headline: "开发工程师" }));
   const session: LoadedSession = { id: crypto.randomUUID(), title: "", rows: [] };
@@ -64,7 +64,7 @@ function fixture(configOverrides: Partial<AppConfig> = {}, depsOverrides: Partia
   const sendCode = vi.fn(async () => {});
   const authenticate = vi.fn(async () => ({ email: "verified@example.com", visitorId: "visitor-1" }));
   const abuse = configOverrides.abuseLimits ?? limits();
-  const adminAccounts = depsOverrides.adminAccounts ?? createMemoryAdminAccounts();
+  const adminAccounts = depsOverrides.adminAccounts ?? (injectAdmin ? createMemoryAdminAccounts() : undefined);
   const config: AppConfig = {
     port: 0, databaseUrl: "unused", cookieSecure: false,
     embeddingBaseUrl: "http://127.0.0.1:9", embeddingModel: "test", embeddingApiKey: "", embeddingDimension: 1024,
@@ -81,9 +81,8 @@ function fixture(configOverrides: Partial<AppConfig> = {}, depsOverrides: Partia
     vector: { upsert: vi.fn(), rebuild: vi.fn(), delete: vi.fn(), search: vi.fn(async () => []) },
     protection,
     auth: { configured: true, authenticate, sendCode, verify: async () => { throw new Error("夹具不校验验证码"); }, logout: async () => {} },
-    adminAccounts,
     ...depsOverrides,
-    adminAccounts,
+    ...(adminAccounts ? { adminAccounts } : {}),
   };
   let server;
   try {
@@ -191,7 +190,7 @@ describe("站长鉴权", () => {
     const protection = createMemoryProtection({ rateWindowMs: 1000, rateMax: 10, limits: limits() });
     try {
       expect(() => fixture({}, { protection })).toThrow(/黑名单/);
-      expect(() => fixture({}, { protection, ipBans: createMemoryIpBans() })).toThrow(/站长账号/);
+      expect(() => fixture({}, { protection, ipBans: createMemoryIpBans() }, Date.now, false)).toThrow(/站长账号/);
       expect(() => fixture({}, {
         protection,
         ipBans: createMemoryIpBans(),
